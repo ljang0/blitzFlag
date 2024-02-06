@@ -1,0 +1,423 @@
+---
+title: "blitzEDA"
+author: "Lawrence Jang"
+date: "1/28/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment 1: EDA
+
+
+### Read in the data
+
+read in our csvs from the Big Data Bowl 2023 dataset
+
+```{r}
+games = read.csv("games.csv")
+plays = read.csv("plays.csv")
+players = read.csv("players.csv")
+pff = read.csv("pffScoutingData.csv")
+week1 = read.csv("week1.csv")
+week2 = read.csv("week2.csv")
+week3 = read.csv("week3.csv")
+week4 = read.csv("week4.csv")
+week5 = read.csv("week5.csv")
+week6 = read.csv("week6.csv")
+week7 = read.csv("week7.csv")
+week8 = read.csv("week8.csv")
+#merge all the weeks together
+allWeeks = rbind(week1, week2, week3, week4, week5, week6, week7, week8)
+```
+
+### EDA
+
+Bar chart for top 5 offensive personnels.
+
+```{r}
+personnel_counts <- table(plays$personnelO)
+personnel_counts <- as.data.frame(personnel_counts)
+colnames(personnel_counts) <- c("Personnel", "Frequency")
+
+# Order the data frame by Frequency in descending order
+personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
+
+# Take the top 5 rows
+top5_personnel <- head(personnel_counts, 5)
+
+# Reorder the 'Personnel' factor by Frequency
+top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
+
+# Create a bar chart using ggplot2 with rotated x-axis labels
+ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 5 Offensive Personnels 2021-2022 NFL Season",
+       x = "Personnel",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+
+Bar chart for top 5 defensive personnels.
+
+```{r}
+personnel_counts <- table(plays$personnelD)
+personnel_counts <- as.data.frame(personnel_counts)
+colnames(personnel_counts) <- c("Personnel", "Frequency")
+
+# Order the data frame by Frequency in descending order
+personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
+
+# Take the top 5 rows
+top5_personnel <- head(personnel_counts, 5)
+
+# Reorder the 'Personnel' factor by Frequency
+top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
+
+# Create a bar chart using ggplot2 with rotated x-axis labels
+ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 5 Defensive Personnels 2021-2022 NFL Season",
+       x = "Personnel",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+
+Function for bar charts.
+
+```{r}
+create_sorted_bar_chart <- function(data, column, top_n = 5) {
+  # Create a table of the specified column by frequency
+  column_counts <- table(data[[column]])
+  column_counts <- as.data.frame(column_counts)
+  colnames(column_counts) <- c(column, "Frequency")
+
+  # Order the data frame by Frequency in descending order
+  column_counts <- column_counts[order(-column_counts$Frequency), ]
+
+  # Take the top 'top_n' rows
+  top_n_data <- head(column_counts, top_n)
+
+  # Reorder the column factor by Frequency
+  top_n_data[[column]] <- factor(top_n_data[[column]], levels = top_n_data[[column]][order(-top_n_data$Frequency)])
+
+  # Create a bar chart using ggplot2 with rotated x-axis labels
+  ggplot(top_n_data, aes(x = reorder(get(column), -Frequency), y = Frequency, fill = get(column))) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Top Defensive Personnels 2021-2022 NFL Season"),
+         x = column,
+         y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+}
+
+# Create sorted bar charts for personnelD and offenseFormation
+plot_personnelD <- create_sorted_bar_chart(plays, "personnelD")
+plot_offenseFormation <- create_sorted_bar_chart(plays, "offenseFormation")
+plot_personnelD 
+```
+
+
+Bar chart for most common defensive roles.
+
+```{r}
+ggplot(pff, aes(x = pff_role, fill = pff_role)) +
+  geom_bar(stat = "count", show.legend = FALSE) +
+  labs(title = "Distribution of pff_role",
+       x = "pff_role",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  #
+```
+```{r}
+blitz_plays <- pff %>% filter(pff_role == "Pass Rush")
+
+# Calculate the average number of blitzers per play
+average_blitzers_per_play <- blitz_plays %>% group_by(gameId, playId) %>% summarise(n_blitzers = n())
+
+# Print the result
+mean(average_blitzers_per_play$n_blitzers)
+median(average_blitzers_per_play$n_blitzers)
+min(average_blitzers_per_play$n_blitzers)
+max(average_blitzers_per_play$n_blitzers)
+```
+```{r}
+merged_data <- merge(plays, pff, by = c("gameId", "playId"), all.y = TRUE)
+
+# The 'all.x = TRUE' argument keeps all rows from 'plays' and adds matching columns from 'pff'
+
+# Check the structure of the merged data
+str(merged_data)
+```
+
+Bar chart for calculating average rushers per down.
+ 
+```{r}
+library(dplyr)
+
+# Filter for plays where a rusher was present
+rusher_plays <- merged_data %>% filter(pff_role == "Pass Rush")
+rusher_plays = rusher_plays %>% filter(down != 0)
+
+# Calculate the average number of rushers for each down
+rushers_by_down <- rusher_plays %>%
+  group_by(down, gameId, playId) %>%
+  summarise(rushers = n())
+
+avgRushers = rushers_by_down %>% group_by(down) %>% summarise(avg = mean(rushers))
+medRushers = rushers_by_down %>% group_by(down) %>% summarise(med = median(rushers))
+
+# Create a bar chart
+ggplot(avgRushers, aes(x = as.factor(down), y = avg)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Average Number of Rushers Across Downs",
+       x = "Down",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+ggplot(medRushers, aes(x = as.factor(down), y = med)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Median Number of Rushers Across Downs",
+       x = "Down",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+```
+
+Bar chart for calculating average number of rushers across position.
+
+```{r}
+library(dplyr)
+
+positionMerged = merge(players, merged_data, by = c("nflId"), all.y = TRUE)
+
+# Filter for plays where a rusher was present
+position_Rushplays <- positionMerged %>% filter(pff_role == "Pass Rush") %>% filter(!(officialPosition %in% c("G", "RB")))
+rusher_plays = position_Rushplays %>% filter(down != 0)
+
+# Calculate the average number of rushers for each down
+rushers_by_down <- rusher_plays %>%
+  group_by(officialPosition, gameId, playId) %>%
+  summarise(rushers = n())
+
+avgRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(avg = mean(rushers))
+medRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(med = median(rushers))
+
+# Create a bar chart
+ggplot(avgRushers, aes(x = reorder(officialPosition, -avg), y = avg)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Average Number of Rushers Across Positions",
+       x = "Defensive Position",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+
+```
+
+# Making a Baseline
+
+
+### Week 1 Data Example
+```{r}
+library(dplyr)
+# merge all week 1 data with player background data
+week1PlayerInfo = merge(week1, players, by = c("nflId"), all.x = TRUE)
+# merge all week 1 frames with PFF data for each play
+week1PlayerInfo = merge(week1PlayerInfo, pff, by = c("gameId", "playId", "nflId"), all.x = TRUE)
+# merge with play level data
+week1PlayerInfo = merge(week1PlayerInfo, plays, by = c("gameId", "playId"), all.x = TRUE)
+#w1ballsnaps = week1 %>% filter(event == "ball_snap")
+# filter for all centers
+week1Snaps = week1PlayerInfo %>% filter(event == "ball_snap" & pff_positionLinedUp == "C")
+week1Snaps$centerX = week1Snaps$x
+week1Snaps$centerY = week1Snaps$y
+week1Snaps = week1Snaps %>% select(c("playId", "gameId", "centerX", "centerY"))
+```
+
+### Week 2 Holdout
+```{r}
+library(dplyr)
+# merge all week 1 data with player background data
+week2PlayerInfo = merge(week2, players, by = c("nflId"), all.x = TRUE)
+# merge all week 1 frames with PFF data for each play
+week2PlayerInfo = merge(week2PlayerInfo, pff, by = c("gameId", "playId", "nflId"), all.x = TRUE)
+# merge with play level data
+week2PlayerInfo = merge(week2PlayerInfo, plays, by = c("gameId", "playId"), all.x = TRUE)
+#w1ballsnaps = week1 %>% filter(event == "ball_snap")
+# filter for all centers
+week2Snaps = week2PlayerInfo %>% filter(event == "ball_snap" & pff_positionLinedUp == "C")
+week2Snaps$centerX = week2Snaps$x
+week2Snaps$centerY = week2Snaps$y
+week2Snaps = week2Snaps %>% select(c("playId", "gameId", "centerX", "centerY"))
+# get the first frozen shot
+zeroFrame2 = week2PlayerInfo %>% filter(frameId == 1)
+# add center x,y
+zeroFrame2 = merge(zeroFrame2, week2Snaps, by = c("gameId", "playId"), all.x = TRUE)
+# add team and play level data
+#zeroFrameFull = merge(zeroFrame, mergedPlays, by = c("gameId","playId"), all.x = TRUE)
+# filter for defensive players
+defenseZeroFrame2 <- zeroFrame2 %>%filter(team != possessionTeam)
+# code the outcome variable and factor variables
+#head(defenseZeroFrame)
+defenseZeroFrame2$label <- ifelse(defenseZeroFrame2$pff_role == "Pass Rush", 1, 0)
+defenseZeroFrame2$label <- factor(defenseZeroFrame2$label)
+#colnames(defenseZeroFrame2)
+# get distance from snap of ball
+defenseZeroFrame2$xDiff = abs(defenseZeroFrame2$centerX - defenseZeroFrame2$x)
+defenseZeroFrame2$yDiff = abs(defenseZeroFrame2$centerY - defenseZeroFrame2$y)
+```
+
+# try for all weeks
+
+```{r}
+library(dplyr)
+# merge all week 1 data with player background data
+weeksPlayerInfo = merge(allWeeks, players, by = c("nflId"), all.x = TRUE)
+# merge all week 1 frames with PFF data for each play
+weeksPlayerInfo = merge(weeksPlayerInfo, pff, by = c("gameId", "playId", "nflId"), all.x = TRUE)
+# merge with play level data
+weeksPlayerInfo = merge(weeksPlayerInfo, plays, by = c("gameId", "playId"), all.x = TRUE)
+#w1ballsnaps = week1 %>% filter(event == "ball_snap")
+# filter for all centers
+weeksSnaps = weeksPlayerInfo %>% filter(event == "ball_snap" & pff_positionLinedUp == "C")
+weeksSnaps$centerX = weeksSnaps$x
+weeksSnaps$centerY = weeksSnaps$y
+weeksSnaps = weeksSnaps %>% select(c("playId", "gameId", "centerX", "centerY"))
+# get the first frozen shot
+zeroFrameAll = weeksPlayerInfo %>% filter(frameId == 1)
+# add center x,y
+zeroFrameAll = merge(zeroFrameAll, weeksSnaps, by = c("gameId", "playId"), all.x = TRUE)
+# add team and play level data
+#zeroFrameFull = merge(zeroFrame, mergedPlays, by = c("gameId","playId"), all.x = TRUE)
+# filter for defensive players
+defenseZeroFrameAll <- zeroFrameAll %>%filter(team != possessionTeam)
+# code the outcome variable and factor variables
+#head(defenseZeroFrame)
+defenseZeroFrameAll$label <- ifelse(defenseZeroFrameAll$pff_role == "Pass Rush", 1, 0)
+defenseZeroFrameAll$label <- factor(defenseZeroFrameAll$label)
+#colnames(defenseZeroFrame2)
+# get distance from snap of ball
+defenseZeroFrameAll$xDiff = abs(defenseZeroFrameAll$centerX - defenseZeroFrameAll$x)
+defenseZeroFrameAll$yDiff = abs(defenseZeroFrameAll$centerY - defenseZeroFrameAll$y)
+```
+
+```{r}
+# get the first frozen shot
+zeroFrame = week1PlayerInfo %>% filter(frameId == 1)
+# add center x,y
+zeroFrame = merge(zeroFrame, week1Snaps, by = c("gameId", "playId"), all.x = TRUE)
+# add team and play level data
+#zeroFrameFull = merge(zeroFrame, mergedPlays, by = c("gameId","playId"), all.x = TRUE)
+# filter for defensive players
+defenseZeroFrame <- zeroFrame %>%
+  filter(team != possessionTeam)
+# code the outcome variable and factor variables
+head(defenseZeroFrame)
+defenseZeroFrame$label <- ifelse(defenseZeroFrame$pff_role == "Pass Rush", 1, 0)
+colnames(defenseZeroFrame)
+# get distance from snap of ball
+defenseZeroFrame$xDiff = abs(defenseZeroFrame$centerX - defenseZeroFrame$x)
+defenseZeroFrame$yDiff = abs(defenseZeroFrame$centerY - defenseZeroFrame$y)
+defenseZeroFrame$pff_positionLinedUp = as.factor(defenseZeroFrame$pff_positionLinedUp)
+defenseZeroFrame$personnelO = as.factor(defenseZeroFrame$personnelO)
+defenseZeroFrame$personnelD = as.factor(defenseZeroFrame$personnelD)
+#defenseZeroFrame = na.omit(defenseZeroFrame)
+```
+
+
+
+```{r}
+# decision tree
+library(rpart)
+library(caret)
+splitIndex <- createDataPartition(defenseZeroFrameAll$label, p = 0.7, list = FALSE)
+train_data <- defenseZeroFrameAll[splitIndex, ]
+test_data <- defenseZeroFrameAll[-splitIndex, ]
+tree_model <- rpart(label ~ nflId + xDiff + yDiff + yardsToGo + defendersInBox + down, data = train_data, method = "class")
+predictions <- predict(tree_model, test_data, type = "class")
+conf_matrix <- confusionMatrix(predictions, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+### Modeling... creating some classification models to toy with
+
+let's try xgboost.
+
+```{r}
+library(xgboost)
+library(caret)
+
+index <- sample(1:nrow(defenseZeroFrameAll), 0.7 * nrow(defenseZeroFrameAll))
+# Create training and testing sets
+train_data <- defenseZeroFrameAll[index, ]
+test_data <- defenseZeroFrameAll[-index, ]
+train_data$label = as.numeric(as.character(train_data$label))
+test_data$label = as.numeric(as.character(test_data$label))
+
+train_data <- train_data[complete.cases(train_data$label), ]
+test_data <- test_data[complete.cases(test_data$label), ]
+
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, c("xDiff", "yDiff", "yardsToGo", "defendersInBox")]), label = train_data$label)
+dtest <- xgb.DMatrix(data = as.matrix(test_data[,c("xDiff", "yDiff", "yardsToGo", "defendersInBox")]), label = test_data$label)
+
+params <- list(
+  objective = "binary:logistic",  # Binary classification problem
+  eval_metric = "logloss",        # Logarithmic loss as evaluation metric
+  max_depth = 6,                  # Maximum depth of a tree
+  eta = 0.3,                      # Learning rate
+  subsample = 0.8,                # Fraction of observations to be randomly sampled for each tree
+  colsample_bytree = 0.8          # Fraction of features to be randomly sampled for each tree
+)
+
+# Train the XGBoost model
+xgb_model <- xgboost(
+  params = params,
+  data = dtrain,
+  nrounds = 100,                   # Number of boosting rounds
+  early_stopping_rounds = 10,      # Stop if performance does not improve for this many rounds
+  verbose = 1                      # Print messages during training
+)
+
+# Make predictions on the test set
+predictions <- predict(xgb_model, dtest)
+
+# Convert predicted probabilities to binary predictions (0 or 1)
+binary_predictions <- ifelse(predictions > 0.5, 1, 0)
+
+# Evaluate the model performance (you can use other metrics as well)
+conf_matrix <- table(binary_predictions, test_data$label)
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+cat("Accuracy:", accuracy, "\n")
+```
+
+
+
+```{r}
+# coding a LOS variable
+#mergedPlays <- merge(plays,games, by = c("gameId"), all.x = TRUE)
+#merged1 = mergedPlays %>% filter(week == 1)
+
+#mergedPlays1 <- merge(mergedPlays, mergedW1, by = c("gameId", "playId"))
+#mergedPlays1 <- merge(mergedPlays, mergedW1, by = c("gameId", "playID"))
+
+# create LOS coordinate
+#mergedPlays = mergedPlays %>%   mutate(
+#    losX = if_else(yardlineSide == homeTeamAbbr, 10 + yardlineNumber, 120 - 10 - yardlineNumber)
+#  )
+```
