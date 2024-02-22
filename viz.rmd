@@ -1,0 +1,217 @@
+---
+title: "viz"
+author: "Lawrence Jang"
+date: "1/28/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Read in the data
+
+read in our csvs from the Big Data Bowl 2023 dataset
+
+```{r}
+games = read.csv("games.csv")
+plays = read.csv("plays.csv")
+players = read.csv("players.csv")
+pff = read.csv("pffScoutingData.csv")
+week1 = read.csv("week1.csv")
+week2 = read.csv("week2.csv")
+week3 = read.csv("week3.csv")
+week4 = read.csv("week4.csv")
+week5 = read.csv("week5.csv")
+week6 = read.csv("week6.csv")
+week7 = read.csv("week7.csv")
+week8 = read.csv("week8.csv")
+#merge all the weeks together
+allWeeks = rbind(week1, week2, week3, week4, week5, week6, week7, week8)
+```
+
+### EDA
+
+Bar chart for top 5 offensive personnels.
+
+```{r}
+personnel_counts <- table(plays$personnelO)
+personnel_counts <- as.data.frame(personnel_counts)
+colnames(personnel_counts) <- c("Personnel", "Frequency")
+
+# Order the data frame by Frequency in descending order
+personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
+
+# Take the top 5 rows
+top5_personnel <- head(personnel_counts, 5)
+
+# Reorder the 'Personnel' factor by Frequency
+top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
+
+# Create a bar chart using ggplot2 with rotated x-axis labels
+ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 5 Offensive Personnels 2021-2022 NFL Season",
+       x = "Personnel",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+
+Bar chart for top 5 defensive personnels.
+
+```{r}
+personnel_counts <- table(plays$personnelD)
+personnel_counts <- as.data.frame(personnel_counts)
+colnames(personnel_counts) <- c("Personnel", "Frequency")
+
+# Order the data frame by Frequency in descending order
+personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
+
+# Take the top 5 rows
+top5_personnel <- head(personnel_counts, 5)
+
+# Reorder the 'Personnel' factor by Frequency
+top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
+
+# Create a bar chart using ggplot2 with rotated x-axis labels
+ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 5 Defensive Personnels 2021-2022 NFL Season",
+       x = "Personnel",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+
+Function for bar charts.
+
+```{r}
+create_sorted_bar_chart <- function(data, column, top_n = 5) {
+  # Create a table of the specified column by frequency
+  column_counts <- table(data[[column]])
+  column_counts <- as.data.frame(column_counts)
+  colnames(column_counts) <- c(column, "Frequency")
+
+  # Order the data frame by Frequency in descending order
+  column_counts <- column_counts[order(-column_counts$Frequency), ]
+
+  # Take the top 'top_n' rows
+  top_n_data <- head(column_counts, top_n)
+
+  # Reorder the column factor by Frequency
+  top_n_data[[column]] <- factor(top_n_data[[column]], levels = top_n_data[[column]][order(-top_n_data$Frequency)])
+
+  # Create a bar chart using ggplot2 with rotated x-axis labels
+  ggplot(top_n_data, aes(x = reorder(get(column), -Frequency), y = Frequency, fill = get(column))) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Top Defensive Personnels 2021-2022 NFL Season"),
+         x = column,
+         y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+}
+
+# Create sorted bar charts for personnelD and offenseFormation
+plot_personnelD <- create_sorted_bar_chart(plays, "personnelD")
+plot_offenseFormation <- create_sorted_bar_chart(plays, "offenseFormation")
+plot_personnelD 
+```
+
+
+Bar chart for most common defensive roles.
+
+```{r}
+ggplot(pff, aes(x = pff_role, fill = pff_role)) +
+  geom_bar(stat = "count", show.legend = FALSE) +
+  labs(title = "Distribution of pff_role",
+       x = "pff_role",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  #
+```
+```{r}
+blitz_plays <- pff %>% filter(pff_role == "Pass Rush")
+
+# Calculate the average number of blitzers per play
+average_blitzers_per_play <- blitz_plays %>% group_by(gameId, playId) %>% summarise(n_blitzers = n())
+
+# Print the result
+mean(average_blitzers_per_play$n_blitzers)
+median(average_blitzers_per_play$n_blitzers)
+min(average_blitzers_per_play$n_blitzers)
+max(average_blitzers_per_play$n_blitzers)
+```
+```{r}
+merged_data <- merge(plays, pff, by = c("gameId", "playId"), all.y = TRUE)
+
+# The 'all.x = TRUE' argument keeps all rows from 'plays' and adds matching columns from 'pff'
+
+# Check the structure of the merged data
+str(merged_data)
+```
+
+Bar chart for calculating average rushers per down.
+ 
+```{r}
+library(dplyr)
+
+# Filter for plays where a rusher was present
+rusher_plays <- merged_data %>% filter(pff_role == "Pass Rush")
+rusher_plays = rusher_plays %>% filter(down != 0)
+
+# Calculate the average number of rushers for each down
+rushers_by_down <- rusher_plays %>%
+  group_by(down, gameId, playId) %>%
+  summarise(rushers = n())
+
+avgRushers = rushers_by_down %>% group_by(down) %>% summarise(avg = mean(rushers))
+medRushers = rushers_by_down %>% group_by(down) %>% summarise(med = median(rushers))
+
+# Create a bar chart
+ggplot(avgRushers, aes(x = as.factor(down), y = avg)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Average Number of Rushers Across Downs",
+       x = "Down",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+ggplot(medRushers, aes(x = as.factor(down), y = med)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Median Number of Rushers Across Downs",
+       x = "Down",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+```
+
+Bar chart for calculating average number of rushers across position.
+
+```{r}
+library(dplyr)
+
+positionMerged = merge(players, merged_data, by = c("nflId"), all.y = TRUE)
+
+# Filter for plays where a rusher was present
+position_Rushplays <- positionMerged %>% filter(pff_role == "Pass Rush") %>% filter(!(officialPosition %in% c("G", "RB")))
+rusher_plays = position_Rushplays %>% filter(down != 0)
+
+# Calculate the average number of rushers for each down
+rushers_by_down <- rusher_plays %>%
+  group_by(officialPosition, gameId, playId) %>%
+  summarise(rushers = n())
+
+avgRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(avg = mean(rushers))
+medRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(med = median(rushers))
+
+# Create a bar chart
+ggplot(avgRushers, aes(x = reorder(officialPosition, -avg), y = avg)) +
+  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
+  labs(title = "Average Number of Rushers Across Positions",
+       x = "Defensive Position",
+       y = "Average Number of Rushers") +
+  theme_minimal()
+
+```
+
+

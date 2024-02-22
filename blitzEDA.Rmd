@@ -1,5 +1,5 @@
 ---
-title: "blitzEDA"
+title: "modeling"
 author: "Lawrence Jang"
 date: "1/28/2024"
 output: html_document
@@ -8,9 +8,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
-## Assignment 1: EDA
-
 
 ### Read in the data
 
@@ -31,249 +28,35 @@ week7 = read.csv("week7.csv")
 week8 = read.csv("week8.csv")
 #merge all the weeks together
 allWeeks = rbind(week1, week2, week3, week4, week5, week6, week7, week8)
-```
-
-### EDA
-
-Bar chart for top 5 offensive personnels.
-
-```{r}
-personnel_counts <- table(plays$personnelO)
-personnel_counts <- as.data.frame(personnel_counts)
-colnames(personnel_counts) <- c("Personnel", "Frequency")
-
-# Order the data frame by Frequency in descending order
-personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
-
-# Take the top 5 rows
-top5_personnel <- head(personnel_counts, 5)
-
-# Reorder the 'Personnel' factor by Frequency
-top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
-
-# Create a bar chart using ggplot2 with rotated x-axis labels
-ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Top 5 Offensive Personnels 2021-2022 NFL Season",
-       x = "Personnel",
-       y = "Frequency") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+allWeeks = allWeeks %>% mutate(
+    x = ifelse(playDirection == "left", 120 - x, x),
+    y = ifelse(playDirection == "left", 160 / 3 - y, y),
+    # flip player direction and orientation
+    dir = ifelse(playDirection == "left", dir + 180, dir),
+    dir = ifelse(dir > 360, dir - 360, dir),
+    o = ifelse(playDirection == "left", o + 180, o),
+    o = ifelse(o > 360, o - 360, o)
+  )
 ```
 
 
-Bar chart for top 5 defensive personnels.
-
-```{r}
-personnel_counts <- table(plays$personnelD)
-personnel_counts <- as.data.frame(personnel_counts)
-colnames(personnel_counts) <- c("Personnel", "Frequency")
-
-# Order the data frame by Frequency in descending order
-personnel_counts <- personnel_counts[order(-personnel_counts$Frequency), ]
-
-# Take the top 5 rows
-top5_personnel <- head(personnel_counts, 5)
-
-# Reorder the 'Personnel' factor by Frequency
-top5_personnel$Personnel <- factor(top5_personnel$Personnel, levels = top5_personnel$Personnel[order(-top5_personnel$Frequency)])
-
-# Create a bar chart using ggplot2 with rotated x-axis labels
-ggplot(top5_personnel, aes(x = reorder(Personnel, -Frequency), y = Frequency, fill = Personnel)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Top 5 Defensive Personnels 2021-2022 NFL Season",
-       x = "Personnel",
-       y = "Frequency") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
-```
-
-
-Function for bar charts.
-
-```{r}
-create_sorted_bar_chart <- function(data, column, top_n = 5) {
-  # Create a table of the specified column by frequency
-  column_counts <- table(data[[column]])
-  column_counts <- as.data.frame(column_counts)
-  colnames(column_counts) <- c(column, "Frequency")
-
-  # Order the data frame by Frequency in descending order
-  column_counts <- column_counts[order(-column_counts$Frequency), ]
-
-  # Take the top 'top_n' rows
-  top_n_data <- head(column_counts, top_n)
-
-  # Reorder the column factor by Frequency
-  top_n_data[[column]] <- factor(top_n_data[[column]], levels = top_n_data[[column]][order(-top_n_data$Frequency)])
-
-  # Create a bar chart using ggplot2 with rotated x-axis labels
-  ggplot(top_n_data, aes(x = reorder(get(column), -Frequency), y = Frequency, fill = get(column))) +
-    geom_bar(stat = "identity") +
-    labs(title = paste("Top Defensive Personnels 2021-2022 NFL Season"),
-         x = column,
-         y = "Frequency") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
-}
-
-# Create sorted bar charts for personnelD and offenseFormation
-plot_personnelD <- create_sorted_bar_chart(plays, "personnelD")
-plot_offenseFormation <- create_sorted_bar_chart(plays, "offenseFormation")
-plot_personnelD 
-```
-
-
-Bar chart for most common defensive roles.
-
-```{r}
-ggplot(pff, aes(x = pff_role, fill = pff_role)) +
-  geom_bar(stat = "count", show.legend = FALSE) +
-  labs(title = "Distribution of pff_role",
-       x = "pff_role",
-       y = "Count") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  #
-```
-```{r}
-blitz_plays <- pff %>% filter(pff_role == "Pass Rush")
-
-# Calculate the average number of blitzers per play
-average_blitzers_per_play <- blitz_plays %>% group_by(gameId, playId) %>% summarise(n_blitzers = n())
-
-# Print the result
-mean(average_blitzers_per_play$n_blitzers)
-median(average_blitzers_per_play$n_blitzers)
-min(average_blitzers_per_play$n_blitzers)
-max(average_blitzers_per_play$n_blitzers)
-```
-```{r}
-merged_data <- merge(plays, pff, by = c("gameId", "playId"), all.y = TRUE)
-
-# The 'all.x = TRUE' argument keeps all rows from 'plays' and adds matching columns from 'pff'
-
-# Check the structure of the merged data
-str(merged_data)
-```
-
-Bar chart for calculating average rushers per down.
- 
-```{r}
-library(dplyr)
-
-# Filter for plays where a rusher was present
-rusher_plays <- merged_data %>% filter(pff_role == "Pass Rush")
-rusher_plays = rusher_plays %>% filter(down != 0)
-
-# Calculate the average number of rushers for each down
-rushers_by_down <- rusher_plays %>%
-  group_by(down, gameId, playId) %>%
-  summarise(rushers = n())
-
-avgRushers = rushers_by_down %>% group_by(down) %>% summarise(avg = mean(rushers))
-medRushers = rushers_by_down %>% group_by(down) %>% summarise(med = median(rushers))
-
-# Create a bar chart
-ggplot(avgRushers, aes(x = as.factor(down), y = avg)) +
-  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
-  labs(title = "Average Number of Rushers Across Downs",
-       x = "Down",
-       y = "Average Number of Rushers") +
-  theme_minimal()
-ggplot(medRushers, aes(x = as.factor(down), y = med)) +
-  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
-  labs(title = "Median Number of Rushers Across Downs",
-       x = "Down",
-       y = "Average Number of Rushers") +
-  theme_minimal()
-```
-
-Bar chart for calculating average number of rushers across position.
-
-```{r}
-library(dplyr)
-
-positionMerged = merge(players, merged_data, by = c("nflId"), all.y = TRUE)
-
-# Filter for plays where a rusher was present
-position_Rushplays <- positionMerged %>% filter(pff_role == "Pass Rush") %>% filter(!(officialPosition %in% c("G", "RB")))
-rusher_plays = position_Rushplays %>% filter(down != 0)
-
-# Calculate the average number of rushers for each down
-rushers_by_down <- rusher_plays %>%
-  group_by(officialPosition, gameId, playId) %>%
-  summarise(rushers = n())
-
-avgRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(avg = mean(rushers))
-medRushers = rushers_by_down %>% group_by(officialPosition) %>% summarise(med = median(rushers))
-
-# Create a bar chart
-ggplot(avgRushers, aes(x = reorder(officialPosition, -avg), y = avg)) +
-  geom_bar(stat = "identity", fill = "lightblue", colour = "navy") +
-  labs(title = "Average Number of Rushers Across Positions",
-       x = "Defensive Position",
-       y = "Average Number of Rushers") +
-  theme_minimal()
-
-```
+# MODELING:
 
 # Making a Baseline
 
-
-### Week 1 Data Example
-```{r}
-library(dplyr)
-# merge all week 1 data with player background data
-week1PlayerInfo = merge(week1, players, by = c("nflId"), all.x = TRUE)
-# merge all week 1 frames with PFF data for each play
-week1PlayerInfo = merge(week1PlayerInfo, pff, by = c("gameId", "playId", "nflId"), all.x = TRUE)
-# merge with play level data
-week1PlayerInfo = merge(week1PlayerInfo, plays, by = c("gameId", "playId"), all.x = TRUE)
-#w1ballsnaps = week1 %>% filter(event == "ball_snap")
-# filter for all centers
-week1Snaps = week1PlayerInfo %>% filter(event == "ball_snap" & pff_positionLinedUp == "C")
-week1Snaps$centerX = week1Snaps$x
-week1Snaps$centerY = week1Snaps$y
-week1Snaps = week1Snaps %>% select(c("playId", "gameId", "centerX", "centerY"))
-```
-
-### Week 2 Holdout
-```{r}
-library(dplyr)
-# merge all week 1 data with player background data
-week2PlayerInfo = merge(week2, players, by = c("nflId"), all.x = TRUE)
-# merge all week 1 frames with PFF data for each play
-week2PlayerInfo = merge(week2PlayerInfo, pff, by = c("gameId", "playId", "nflId"), all.x = TRUE)
-# merge with play level data
-week2PlayerInfo = merge(week2PlayerInfo, plays, by = c("gameId", "playId"), all.x = TRUE)
-#w1ballsnaps = week1 %>% filter(event == "ball_snap")
-# filter for all centers
-week2Snaps = week2PlayerInfo %>% filter(event == "ball_snap" & pff_positionLinedUp == "C")
-week2Snaps$centerX = week2Snaps$x
-week2Snaps$centerY = week2Snaps$y
-week2Snaps = week2Snaps %>% select(c("playId", "gameId", "centerX", "centerY"))
-# get the first frozen shot
-zeroFrame2 = week2PlayerInfo %>% filter(frameId == 1)
-# add center x,y
-zeroFrame2 = merge(zeroFrame2, week2Snaps, by = c("gameId", "playId"), all.x = TRUE)
-# add team and play level data
-#zeroFrameFull = merge(zeroFrame, mergedPlays, by = c("gameId","playId"), all.x = TRUE)
-# filter for defensive players
-defenseZeroFrame2 <- zeroFrame2 %>%filter(team != possessionTeam)
-# code the outcome variable and factor variables
-#head(defenseZeroFrame)
-defenseZeroFrame2$label <- ifelse(defenseZeroFrame2$pff_role == "Pass Rush", 1, 0)
-defenseZeroFrame2$label <- factor(defenseZeroFrame2$label)
-#colnames(defenseZeroFrame2)
-# get distance from snap of ball
-defenseZeroFrame2$xDiff = abs(defenseZeroFrame2$centerX - defenseZeroFrame2$x)
-defenseZeroFrame2$yDiff = abs(defenseZeroFrame2$centerY - defenseZeroFrame2$y)
-```
-
-# try for all weeks
+# ALL WEEK DATASET
 
 ```{r}
 library(dplyr)
+allWeeks = allWeeks %>% mutate(
+    x = ifelse(playDirection == "left", 120 - x, x),
+    y = ifelse(playDirection == "left", 160 / 3 - y, y),
+    # flip player direction and orientation
+    dir = ifelse(playDirection == "left", dir + 180, dir),
+    dir = ifelse(dir > 360, dir - 360, dir),
+    o = ifelse(playDirection == "left", o + 180, o),
+    o = ifelse(o > 360, o - 360, o)
+  )
 # merge all week 1 data with player background data
 weeksPlayerInfo = merge(allWeeks, players, by = c("nflId"), all.x = TRUE)
 # merge all week 1 frames with PFF data for each play
@@ -302,42 +85,70 @@ defenseZeroFrameAll$label <- factor(defenseZeroFrameAll$label)
 # get distance from snap of ball
 defenseZeroFrameAll$xDiff = abs(defenseZeroFrameAll$centerX - defenseZeroFrameAll$x)
 defenseZeroFrameAll$yDiff = abs(defenseZeroFrameAll$centerY - defenseZeroFrameAll$y)
+defenseZeroFrameAll = defenseZeroFrameAll[complete.cases(defenseZeroFrameAll$label), ]
 ```
+
+### Majority Class Prediction
 
 ```{r}
-# get the first frozen shot
-zeroFrame = week1PlayerInfo %>% filter(frameId == 1)
-# add center x,y
-zeroFrame = merge(zeroFrame, week1Snaps, by = c("gameId", "playId"), all.x = TRUE)
-# add team and play level data
-#zeroFrameFull = merge(zeroFrame, mergedPlays, by = c("gameId","playId"), all.x = TRUE)
-# filter for defensive players
-defenseZeroFrame <- zeroFrame %>%
-  filter(team != possessionTeam)
-# code the outcome variable and factor variables
-head(defenseZeroFrame)
-defenseZeroFrame$label <- ifelse(defenseZeroFrame$pff_role == "Pass Rush", 1, 0)
-colnames(defenseZeroFrame)
-# get distance from snap of ball
-defenseZeroFrame$xDiff = abs(defenseZeroFrame$centerX - defenseZeroFrame$x)
-defenseZeroFrame$yDiff = abs(defenseZeroFrame$centerY - defenseZeroFrame$y)
-defenseZeroFrame$pff_positionLinedUp = as.factor(defenseZeroFrame$pff_positionLinedUp)
-defenseZeroFrame$personnelO = as.factor(defenseZeroFrame$personnelO)
-defenseZeroFrame$personnelD = as.factor(defenseZeroFrame$personnelD)
-#defenseZeroFrame = na.omit(defenseZeroFrame)
+majority_labels <- defenseZeroFrameAll %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(MajorityLabel = names(which.max(table(label))),
+            .groups = 'drop')
+defenseZeroFrameAll <- defenseZeroFrameAll %>%
+  left_join(majority_labels, by = "pff_positionLinedUp") %>%
+  mutate(MajorityClassPrediction = as.numeric(MajorityLabel)) %>%
+  select(-MajorityLabel) # Remove the MajorityLabel column after adding Prediction
+
+# Assuming the actual label column in zeroDefenseFrameAll is named `Label`
+
+# Step 2: Calculate accuracy
+accuracy <- sum(defenseZeroFrameAll$label == defenseZeroFrameAll$MajorityClassPrediction) / nrow(defenseZeroFrameAll)
+print(paste("Accuracy:", accuracy))
+
+
+# get stats grouped
+defenseZeroFrameAll <- defenseZeroFrameAll %>%
+  mutate(CorrectMajorityPrediction = label == MajorityClassPrediction)
+metrics_by_group <- defenseZeroFrameAll %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(
+    Accuracy = mean(CorrectMajorityPrediction),
+    Precision = sum(label == 1 & MajorityClassPrediction == 1) / sum(MajorityClassPrediction == 1),
+    Recall = sum(label == 1 & MajorityClassPrediction == 1) / sum(label == 1),
+    truePosCount = sum(MajorityClassPrediction == 1),
+    posCount = sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+
 ```
 
+### Decision Tree
 
+
+### Decision Tree using simply position
 
 ```{r}
 # decision tree
 library(rpart)
 library(caret)
-splitIndex <- createDataPartition(defenseZeroFrameAll$label, p = 0.7, list = FALSE)
-train_data <- defenseZeroFrameAll[splitIndex, ]
-test_data <- defenseZeroFrameAll[-splitIndex, ]
-tree_model <- rpart(label ~ nflId + xDiff + yDiff + yardsToGo + defendersInBox + down, data = train_data, method = "class")
+library(lme4)
+unique_gameids <- unique(defenseZeroFrameAll$gameId)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+train_gameids <- sample(unique_gameids, num_train_gameids)
+# Split the data based on the selected gameids
+train_data <- defenseZeroFrameAll[defenseZeroFrameAll$gameId %in% train_gameids, ]
+test_data <- defenseZeroFrameAll[!(defenseZeroFrameAll$gameId %in% train_gameids), ]
+# Print the summary of the model
+# Convert probabilities to predicted classes (0 or 1)
+tree_model <- rpart(label ~ pff_positionLinedUp, data = train_data, method = "class")
 predictions <- predict(tree_model, test_data, type = "class")
+test_data$predictions = predictions
 conf_matrix <- confusionMatrix(predictions, test_data$label)
 # Display the confusion matrix
 print(conf_matrix)
@@ -355,26 +166,175 @@ cat("Recall (Sensitivity):", round(recall, 2), "\n")
 cat("F1 Score:", round(f1_score, 2), "\n")
 ```
 
-### Modeling... creating some classification models to toy with
+let's try grouping by position.
 
-let's try xgboost.
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPrediction = label == predictions)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(
+    Accuracy = mean(correctPrediction),
+    Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
+    Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
+    truePosCount = sum(predictions == 1),
+    posCount = sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
+
+decision tree with x, y tracking data, defenders in box, yards to go, down, position
+```{r}
+# decision tree
+library(rpart)
+library(caret)
+library(lme4)
+unique_gameids <- unique(defenseZeroFrameAll$gameId)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+#train_gameids <- sample(unique_gameids, num_train_gameids)
+# Split the data based on the selected gameids
+train_data <- defenseZeroFrameAll[defenseZeroFrameAll$gameId %in% train_gameids, ]
+test_data <- defenseZeroFrameAll[!(defenseZeroFrameAll$gameId %in% train_gameids), ]
+# Print the summary of the model
+# Convert probabilities to predicted classes (0 or 1)
+tree_model <- rpart(label ~ xDiff + yDiff + yardsToGo + pff_positionLinedUp + defendersInBox + down, data = train_data, method = "class")
+#tree_model <- rpart(label ~ xDiff + yDiff + yardsToGo + defendersInBox + down, data = train_data, method = "class")
+#tree_model <- rpart(label ~ nflId + personnelD + team,  data = train_data, method = "class")
+predictions <- predict(tree_model, test_data, type = "class")
+test_data$predictions = predictions
+conf_matrix <- confusionMatrix(predictions, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPrediction = label == predictions)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(
+    Accuracy = mean(correctPrediction),
+    Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
+    Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
+    truePosCount = sum(predictions == 1),
+    posCount = sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
+let's try adding direction and orientation:
+
+```{r}
+# decision tree
+library(rpart)
+library(caret)
+library(lme4)
+unique_gameids <- unique(defenseZeroFrameAll$gameId)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+#train_gameids <- sample(unique_gameids, num_train_gameids)
+# Split the data based on the selected gameids
+train_data <- defenseZeroFrameAll[defenseZeroFrameAll$gameId %in% train_gameids, ]
+test_data <- defenseZeroFrameAll[!(defenseZeroFrameAll$gameId %in% train_gameids), ]
+tree_model <- rpart(label ~ xDiff + yDiff + yardsToGo + pff_positionLinedUp + defendersInBox + down + dir + o, data = train_data, method = "class")
+
+predictions <- predict(tree_model, test_data, type = "class")
+test_data$predictions = predictions
+conf_matrix <- confusionMatrix(predictions, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPrediction = label == predictions)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(
+    Accuracy = mean(correctPrediction),
+    Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
+    Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
+    truePosCount = sum(predictions == 1),
+    posCount = sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
+## More Modeling
+
+### XGBoost Models
+
+base level xgboost model with the following variables:
+  xDiff
+  yDiff
+  yardsToGo
+  personnelD
+  personnelO
+  defendersInBox
+  dir
+  o
 
 ```{r}
 library(xgboost)
 library(caret)
 
-index <- sample(1:nrow(defenseZeroFrameAll), 0.7 * nrow(defenseZeroFrameAll))
-# Create training and testing sets
-train_data <- defenseZeroFrameAll[index, ]
-test_data <- defenseZeroFrameAll[-index, ]
+unique_gameids <- unique(defenseZeroFrameAll$gameId)
+defenseZeroFrameAll$personnelD = as.integer(as.factor(defenseZeroFrameAll$personnelD))
+defenseZeroFrameAll$personnelO = as.integer(as.factor(defenseZeroFrameAll$personnelO))
+defenseZeroFrameAll$pff_positionLinedUp = as.integer(as.factor(defenseZeroFrameAll$pff_positionLinedUp))
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+#train_gameids <- sample(unique_gameids, num_train_gameids)
+# Split the data based on the selected gameids
+train_data <- defenseZeroFrameAll[defenseZeroFrameAll$gameId %in% train_gameids, ]
+test_data <- defenseZeroFrameAll[!(defenseZeroFrameAll$gameId %in% train_gameids), ]
+train_data <- train_data[complete.cases(train_data$label), ]
+test_data <- test_data[complete.cases(test_data$label), ]
 train_data$label = as.numeric(as.character(train_data$label))
 test_data$label = as.numeric(as.character(test_data$label))
 
-train_data <- train_data[complete.cases(train_data$label), ]
-test_data <- test_data[complete.cases(test_data$label), ]
 
-dtrain <- xgb.DMatrix(data = as.matrix(train_data[, c("xDiff", "yDiff", "yardsToGo", "defendersInBox")]), label = train_data$label)
-dtest <- xgb.DMatrix(data = as.matrix(test_data[,c("xDiff", "yDiff", "yardsToGo", "defendersInBox")]), label = test_data$label)
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, c("xDiff", "yDiff", "yardsToGo", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')]), label = train_data$label)
+dtest <- xgb.DMatrix(data = as.matrix(test_data[,c("xDiff", "yDiff", "yardsToGo","pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')]), label = test_data$label)
 
 params <- list(
   objective = "binary:logistic",  # Binary classification problem
@@ -403,21 +363,394 @@ binary_predictions <- ifelse(predictions > 0.5, 1, 0)
 # Evaluate the model performance (you can use other metrics as well)
 conf_matrix <- table(binary_predictions, test_data$label)
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+conf_matrix
 cat("Accuracy:", accuracy, "\n")
 ```
 
+### Multilevel Models
+
+Random Intercept Model:
+```{r}
+library(caret)
+library(lme4)
+unique_gameids <- unique(defenseZeroFrameAll$gameId)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+train_gameids <- sample(unique_gameids, num_train_gameids)
+# Split the data based on the selected gameids
+train_data <- defenseZeroFrameAll[defenseZeroFrameAll$gameId %in% train_gameids, ]
+test_data <- defenseZeroFrameAll[!(defenseZeroFrameAll$gameId %in% train_gameids), ]
+train_data <- train_data[complete.cases(train_data$label), ]
+test_data <- test_data[complete.cases(test_data$label), ]
+mlmIntercepts <- glmer(label ~ 1 + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+
+### FOR RANDOM INTERCEPTS:
+
+# Print the summary of the model
+summary(mlmIntercepts)
+
+test_data$predicted_probabilities <- predict(mlmIntercepts, newdata = test_data, type = "response", allow.new.levels = TRUE)
+
+# Convert probabilities to predicted classes (0 or 1)
+test_data$predicted_classes <- as.factor(ifelse(test_data$predicted_probabilities >= 0.5, 1, 0))
+
+# Calculate accuracy
+accuracy <- mean(test_data$label == test_data$predicted_classes, na.rm = TRUE)
+
+conf_matrix <- confusionMatrix(test_data$predicted_classes, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+Random Intercept Models + Coords
+
+```{r}
+mlmCoords  <- glmer(label ~ 1 + xDiff + yDiff + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+### FOR RANDOM INTERCEPTS:
+
+# Print the summary of the model
+summary(mlmCoords)
+
+test_data$predicted_probabilities <- predict(mlmCoords, newdata = test_data, type = "response", allow.new.levels = TRUE)
+
+# Convert probabilities to predicted classes (0 or 1)
+test_data$predicted_classes <- as.factor(ifelse(test_data$predicted_probabilities >= 0.5, 1, 0))
+
+# Calculate accuracy
+accuracy <- mean(test_data$label == test_data$predicted_classes, na.rm = TRUE)
+
+conf_matrix <- confusionMatrix(test_data$predicted_classes, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+Random Intercept Models + Coords + Orientation + Direction
+```{r}
+mlmCoordsFull <- glmer(label ~ 1 + xDiff + yDiff + dir + o + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+### FOR RANDOM INTERCEPTS:
+
+# Print the summary of the model
+summary(mlmCoordsFull)
+
+test_data$predicted_probabilities <- predict(mlmCoordsFull, newdata = test_data, type = "response", allow.new.levels = TRUE)
+
+# Convert probabilities to predicted classes (0 or 1)
+test_data$predicted_classes <- as.factor(ifelse(test_data$predicted_probabilities >= 0.5, 1, 0))
+
+# Calculate accuracy
+accuracy <- mean(test_data$label == test_data$predicted_classes, na.rm = TRUE)
+
+conf_matrix <- confusionMatrix(test_data$predicted_classes, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+### Extra feature manipulation
+
+Let's calculate the average x,y coords for lbs and dline for a given play.
+
+```{r}
+linebackers = c("LILB","ROLB", "RLB","RILB","LLB","LOLB", "MLB")
+dline = c("DRT","RE", "LEO", "DLT","REO", "NLT" ,  "LE",  "NT",  "NRT")
+
+averagePositionsLB <- defenseZeroFrameAll %>%
+  filter(pff_positionLinedUp %in% linebackers) %>%
+  group_by(gameId, playId) %>%
+  summarise(lb_average_x = mean(x, na.rm = TRUE),
+            lb_average_y = mean(y, na.rm = TRUE),
+            .groups = 'drop') # Ensures the result is not grouped
+
+# Step 2: Join this back to the original dataframe to add the average_x and average_y columns
+# Note: Every row corresponding to the same gameId and playId will have the same average_x and average_y values
+# If a playId does not include any linebackers, it will have NA for these averages 
+defenseZeroFrameAll <- defenseZeroFrameAll %>%
+  left_join(averagePositionsLB, by = c("gameId", "playId"))
+
+averagePositionsDL <- defenseZeroFrameAll %>%
+  filter(pff_positionLinedUp %in% dline) %>%
+  group_by(gameId, playId) %>%
+  summarise(dl_average_x = mean(x, na.rm = TRUE),
+            dl_average_y = mean(y, na.rm = TRUE),
+            .groups = 'drop') # Ensures the result is not grouped
+defenseZeroFrameAll <- defenseZeroFrameAll %>%
+  left_join(averagePositionsDL, by = c("gameId", "playId"))
+
+
+defenseZeroFrameAll$lineDiffX = abs(defenseZeroFrameAll$dl_average_x - defenseZeroFrameAll$x)
+defenseZeroFrameAll$lineDiffY = abs(defenseZeroFrameAll$dl_average_y - defenseZeroFrameAll$y)
+defenseZeroFrameAll$lbDiffX = abs(defenseZeroFrameAll$lb_average_x - defenseZeroFrameAll$x)
+defenseZeroFrameAll$lbDiffY = abs(defenseZeroFrameAll$lb_average_y - defenseZeroFrameAll$y)
+```
+
+
+## Linebackers focus
+
+We need to shift to linebackers...the problem is too complex for a single
+model to capture what each type of position does to signify a blitz.
+
+```{r}
+linebackersDF <- defenseZeroFrameAll[defenseZeroFrameAll$pff_positionLinedUp %in% linebackers, ]
+```
+
+Let's run our models using our new focus group of linebackers.
+
+```{r}
+unique_gameids <- unique(linebackersDF$gameId)
+originalLevelsPersonnelD = levels(as.factor(linebackersDF$personnelD))
+originalLevelsPersonnelO = levels(as.factor(linebackersDF$personnelO))
+linebackersDF$personnelD = as.integer(as.factor(linebackersDF$personnelD))
+linebackersDF$personnelO = as.integer(as.factor(linebackersDF$personnelO))
+originalLevelsPositions = levels(as.factor(linebackersDF$pff_positionLinedUp))
+linebackersDF$pff_positionLinedUp = as.integer(as.factor(linebackersDF$pff_positionLinedUp))
+linebackersDF$pff_positionLinedUp_str <- originalLevelsPositions[linebackersDF$pff_positionLinedUp]
+```
 
 
 ```{r}
-# coding a LOS variable
-#mergedPlays <- merge(plays,games, by = c("gameId"), all.x = TRUE)
-#merged1 = mergedPlays %>% filter(week == 1)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
 
-#mergedPlays1 <- merge(mergedPlays, mergedW1, by = c("gameId", "playId"))
-#mergedPlays1 <- merge(mergedPlays, mergedW1, by = c("gameId", "playID"))
+#train_data <- linebackersDF[linebackersDF$gameId %in% train_gameids, ]
+#test_data <- linebackersDF[!(linebackersDF$gameId %in% train_gameids), ]
+#train_data <- train_data[complete.cases(train_data$label), ]
+#test_data <- test_data[complete.cases(test_data$label), ]
+train_data$label = as.numeric(as.character(train_data$label))
+test_data$label = as.numeric(as.character(test_data$label))
 
-# create LOS coordinate
-#mergedPlays = mergedPlays %>%   mutate(
-#    losX = if_else(yardlineSide == homeTeamAbbr, 10 + yardlineNumber, 120 - 10 - yardlineNumber)
-#  )
+#predictors = c("xDiff", "yDiff", "lineDiffX", "lineDiffY", "lbDiffX", "lbDiffY", "yardsToGo", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')
+predictors = c("xDiff", "yDiff", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data$label)
+dtest <- xgb.DMatrix(data = as.matrix(test_data[,predictors]), label = test_data$label)
+
+params <- list(
+  objective = "binary:logistic",  # Binary classification problem
+  eval_metric = "logloss",        # Logarithmic loss as evaluation metric
+  max_depth = 6,                  # Maximum depth of a tree
+  eta = 0.3,                      # Learning rate
+  subsample = 0.8,                # Fraction of observations to be randomly sampled for each tree
+  colsample_bytree = 0.8          # Fraction of features to be randomly sampled for each tree
+)
+
+# Train the XGBoost model
+xgb_model <- xgboost(
+  params = params,
+  data = dtrain,
+  nrounds = 100,                   # Number of boosting rounds
+  early_stopping_rounds = 10,      # Stop if performance does not improve for this many rounds
+  verbose = 1                      # Print messages during training
+)
+
+# Make predictions on the test set
+predictions <- predict(xgb_model, dtest)
+
+# Convert predicted probabilities to binary predictions (0 or 1)
+binary_predictions <- ifelse(predictions > 0.5, 1, 0)
+test_data$predictions = binary_predictions
+# Evaluate the model performance (you can use other metrics as well)
+conf_matrix <- confusionMatrix(as.factor(binary_predictions), as.factor(test_data$label))
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
 ```
+
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPrediction = label == predictions)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp_str ) %>%
+  summarise(
+    Accuracy = mean(correctPrediction),
+    Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
+    Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
+    truePosCount = sum(predictions == 1),
+    posCount = sum(label == 1),
+    total = n(),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
+let's get an honest baseline just using positions within linebacker groups.
+
+
+```{r}
+# decision tree
+library(rpart)
+library(caret)
+library(lme4)
+# Print the summary of the model
+# Convert probabilities to predicted classes (0 or 1)
+tree_model <- rpart(label ~ xDiff + yDiff, data = train_data, method = "class")
+predictions <- predict(tree_model, test_data, type = "class")
+test_data$predictionsNaive = predictions
+conf_matrix <- confusionMatrix(as.factor(test_data$predictionsNaive), as.factor(test_data$label))
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPredictionNaive = label == predictionsNaive)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp_str ) %>%
+  summarise(
+    Accuracy = mean(correctPredictionNaive),
+    Precision = sum(label == 1 & predictionsNaive == 1) / sum(predictionsNaive == 1),
+    Recall = sum(label == 1 & predictionsNaive == 1) / sum(label == 1),
+    truePosCount = sum(predictionsNaive == 1),
+    posCount = sum(label == 1),
+    total = n(),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
+
+```{r}
+mlmCoordsLB  <- glmer(label ~ 1 + xDiff + yDiff + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+### FOR RANDOM INTERCEPTS:
+
+# Print the summary of the model
+summary(mlmCoordsLB)
+
+test_data$predicted_probabilities <- predict(mlmCoords, newdata = test_data, type = "response", allow.new.levels = TRUE)
+
+# Convert probabilities to predicted classes (0 or 1)
+
+test_data$predicted_classes <- as.factor(ifelse(test_data$predicted_probabilities >= 0.5, 1, 0))
+
+# Calculate accuracy
+accuracy <- mean(test_data$label == test_data$predicted_classes, na.rm = TRUE)
+
+conf_matrix <- confusionMatrix(as.factor(test_data$predicted_classes), as.factor(test_data$label))
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+
+```{r}
+mlmBaseLB  <- glmer(label ~ 1 + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+### FOR RANDOM INTERCEPTS:
+
+# Print the summary of the model
+summary(mlmBaseLB)
+
+test_data$predicted_probabilities <- predict(mlmBaseLB, newdata = test_data, type = "response", allow.new.levels = TRUE)
+
+# Convert probabilities to predicted classes (0 or 1)
+
+test_data$predicted_classes <- as.factor(ifelse(test_data$predicted_probabilities >= 0.5, 1, 0))
+
+# Calculate accuracy
+accuracy <- mean(test_data$label == test_data$predicted_classes, na.rm = TRUE)
+
+conf_matrix <- confusionMatrix(as.factor(test_data$predicted_classes), as.factor(test_data$label))
+# Display the confusion matrix
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+```{r}
+# get stats grouped
+test_data <- test_data %>%
+  mutate(correctPredictionMLM = label == predicted_classes)
+metrics_by_group <- test_data %>%
+  group_by(pff_positionLinedUp_str ) %>%
+  summarise(
+    Accuracy = mean(correctPredictionMLM, na.rm = TRUE),
+    Precision = sum(label == 1 & predicted_classes == 1, na.rm = TRUE) / sum(predicted_classes == 1, na.rm = TRUE),
+    Recall = sum(label == 1 & predicted_classes == 1, na.rm = TRUE) / sum(label == 1, na.rm = TRUE),
+    truePosCount = sum(predicted_classes == 1,na.rm = TRUE),
+    posCount = sum(label == 1, na.rm = TRUE),
+    total = n(),
+    .groups = 'drop' # Drop grouping for the output
+  )
+print(metrics_by_group)
+```
+
