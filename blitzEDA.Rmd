@@ -48,15 +48,6 @@ allWeeks = allWeeks %>% mutate(
 
 ```{r}
 library(dplyr)
-allWeeks = allWeeks %>% mutate(
-    x = ifelse(playDirection == "left", 120 - x, x),
-    y = ifelse(playDirection == "left", 160 / 3 - y, y),
-    # flip player direction and orientation
-    dir = ifelse(playDirection == "left", dir + 180, dir),
-    dir = ifelse(dir > 360, dir - 360, dir),
-    o = ifelse(playDirection == "left", o + 180, o),
-    o = ifelse(o > 360, o - 360, o)
-  )
 # merge all week 1 data with player background data
 weeksPlayerInfo = merge(allWeeks, players, by = c("nflId"), all.x = TRUE)
 # merge all week 1 frames with PFF data for each play
@@ -545,7 +536,12 @@ linebackersDF$pff_positionLinedUp_str <- originalLevelsPositions[linebackersDF$p
 ```
 
 
+#### XGBOOST LBS
+
+
+
 ```{r}
+library(xgboost)
 # Set the proportion for the train set
 train_proportion <- 0.7
 # Calculate the number of gameids for the train set
@@ -558,8 +554,8 @@ num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
 train_data$label = as.numeric(as.character(train_data$label))
 test_data$label = as.numeric(as.character(test_data$label))
 
-#predictors = c("xDiff", "yDiff", "lineDiffX", "lineDiffY", "lbDiffX", "lbDiffY", "yardsToGo", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')
-predictors = c("xDiff", "yDiff", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')
+predictors = c("xDiff", "yDiff", "lineDiffX", "lineDiffY", "lbDiffX", "lbDiffY", 'dir', 'o')
+#predictors = c("xDiff", "yDiff", "pff_positionLinedUp", "personnelD", "personnelO", "defendersInBox", 'dir', 'o')
 dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data$label)
 dtest <- xgb.DMatrix(data = as.matrix(test_data[,predictors]), label = test_data$label)
 
@@ -602,24 +598,94 @@ cat("F1 Score:", round(f1_score, 2), "\n")
 ```
 
 ```{r}
+# Get variable importance
+importance_matrix <- xgb.importance(feature_names = colnames(dtrain), model = xgb_model)
+
+# Print the variable importance
+print(importance_matrix)
+new_feature_names <- c("Difference in X Coordinate from AVG D-Line", "Difference in X Coordinate from Center", "Difference in Y Coordinate from Center", "Player Direction", "Difference in Y Coordinate from AVG D-Line", 
+                        
+                       "Player Orientation", "Difference in Y Coordinate from AVG LB", "Difference in X Coordinate from AVG LB")
+if(length(new_feature_names) == nrow(importance_matrix)) {
+  # Assign new feature names
+  importance_matrix$Feature <- new_feature_names
+} else {
+  stop("Number of new feature names does not match the number of features.")
+}
+# Optionally, you can also visualize the importance
+xgb.plot.importance(importance_matrix)
+ggplot(importance_matrix, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top Variable Importance", x = "Feature", y = "Importance")
+```
+
+```{r}
 # get stats grouped
 test_data <- test_data %>%
   mutate(correctPrediction = label == predictions)
 metrics_by_group <- test_data %>%
-  group_by(pff_positionLinedUp_str ) %>%
+  group_by(Position) %>%
   summarise(
     Accuracy = mean(correctPrediction),
     Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
     Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
-    truePosCount = sum(predictions == 1),
-    posCount = sum(label == 1),
-    total = n(),
     .groups = 'drop' # Drop grouping for the output
   )
 print(metrics_by_group)
+pander::pander(metrics_by_group)
 ```
 
 let's get an honest baseline just using positions within linebacker groups.
+
+
+#### majority prediction
+
+```{r}
+majority_labels <- linebackersDF %>%
+  group_by(pff_positionLinedUp) %>%
+  summarise(MajorityLabel = names(which.max(table(label))),
+            .groups = 'drop')
+linebackersDF <- linebackersDF %>%
+  left_join(majority_labels, by = "pff_positionLinedUp") %>%
+  mutate(MajorityClassPrediction = as.integer(MajorityLabel)) %>%
+  select(-MajorityLabel) # Remove the MajorityLabel column after adding Prediction
+
+# Assuming the actual label column in zeroDefenseFrameAll is named `Label`
+
+# Step 2: Calculate accuracy
+accuracy <- sum(linebackersDF$label == linebackersDF$MajorityClassPrediction) / nrow(linebackersDF)
+conf_matrix <- confusionMatrix(as.factor(linebackersDF$MajorityClassPrediction), as.factor(linebackersDF$label))
+print(conf_matrix)
+
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# get stats grouped
+linebackersDF <- linebackersDF %>%
+  mutate(CorrectMajorityPrediction = label == MajorityClassPrediction)
+metrics_by_group <- linebackersDF %>%
+  group_by(Position) %>%
+  summarise(
+    Accuracy = mean(CorrectMajorityPrediction),
+    Precision = sum(label == 1 & MajorityClassPrediction == 1) / sum(MajorityClassPrediction == 1),
+    Recall = sum(label == 1 & MajorityClassPrediction == 1) / sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+#colnames(linebackersDF)[colnames(linebackersDF) == "pff_positionLinedUp_str"] <- "Position"
+#install.packages("pander")
+library(pander)
+pander::pander(metrics_by_group)
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
 
 
 ```{r}
@@ -670,13 +736,13 @@ print(metrics_by_group)
 
 
 ```{r}
-mlmCoordsLB  <- glmer(label ~ 1 + xDiff + yDiff + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
+mlmCoordsLB  <- glmer(label ~ 1 + xDiff + yDiff + pff_positionLinedUp + (1 | nflId) + (1 | personnelD) + (1 | team), data = train_data, family = binomial)
 ### FOR RANDOM INTERCEPTS:
 
 # Print the summary of the model
 summary(mlmCoordsLB)
 
-test_data$predicted_probabilities <- predict(mlmCoords, newdata = test_data, type = "response", allow.new.levels = TRUE)
+test_data$predicted_probabilities <- predict(mlmCoordsLB, newdata = test_data, type = "response", allow.new.levels = TRUE)
 
 # Convert probabilities to predicted classes (0 or 1)
 
@@ -741,16 +807,88 @@ cat("F1 Score:", round(f1_score, 2), "\n")
 test_data <- test_data %>%
   mutate(correctPredictionMLM = label == predicted_classes)
 metrics_by_group <- test_data %>%
-  group_by(pff_positionLinedUp_str ) %>%
+  group_by(Position) %>%
   summarise(
     Accuracy = mean(correctPredictionMLM, na.rm = TRUE),
     Precision = sum(label == 1 & predicted_classes == 1, na.rm = TRUE) / sum(predicted_classes == 1, na.rm = TRUE),
     Recall = sum(label == 1 & predicted_classes == 1, na.rm = TRUE) / sum(label == 1, na.rm = TRUE),
-    truePosCount = sum(predicted_classes == 1,na.rm = TRUE),
-    posCount = sum(label == 1, na.rm = TRUE),
-    total = n(),
     .groups = 'drop' # Drop grouping for the output
   )
-print(metrics_by_group)
+pander(metrics_by_group)
+
 ```
 
+
+#### decision tree for Assignment 2
+
+```{r}
+# decision tree
+library(rpart)
+library(caret)
+library(lme4)
+unique_gameids <- unique(linebackersDF$gameId)
+# Set the proportion for the train set
+train_proportion <- 0.7
+# Calculate the number of gameids for the train set
+num_train_gameids <- ceiling(length(unique_gameids) * train_proportion)
+# Randomly select gameids for the train set
+# Split the data based on the selected gameids
+#train_gameids <- sample(unique_gameids, num_train_gameids)
+train_data <- linebackersDF[linebackersDF$gameId %in% train_gameids, ]
+test_data <- linebackersDF[!(linebackersDF$gameId %in% train_gameids), ]
+tree_model <- rpart(label ~ pff_positionLinedUp + xDiff + yDiff + lineDiffX + lineDiffY + lbDiffY + lbDiffX, data = train_data, method = "class")
+predictions <- predict(tree_model, test_data, type = "class")
+test_data$predictions = predictions
+conf_matrix <- confusionMatrix(predictions, test_data$label)
+# Display the confusion matrix
+print(conf_matrix)
+# Extract accuracy, precision, recall, and F1 score
+accuracy <- conf_matrix$overall["Accuracy"]
+precision <- conf_matrix$byClass["Pos Pred Value"]
+recall <- conf_matrix$byClass["Sensitivity"]
+f1_score <- conf_matrix$byClass["F1"]
+
+# Print the results
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+
+
+test_data <- test_data %>%
+  mutate(correctPrediction = label == predictions)
+metrics_by_group <- test_data %>%
+  group_by(Position) %>%
+  summarise(
+    Accuracy = mean(correctPrediction),
+    Precision = sum(label == 1 & predictions == 1) / sum(predictions == 1),
+    Recall = sum(label == 1 & predictions == 1) / sum(label == 1),
+    .groups = 'drop' # Drop grouping for the output
+  )
+#colnames(linebackersDF)[colnames(linebackersDF) == "pff_positionLinedUp_str"] <- "Position"
+#install.packages("pander")
+library(pander)
+pander::pander(metrics_by_group)
+cat("Accuracy:", round(accuracy, 2), "\n")
+cat("Precision:", round(precision, 2), "\n")
+cat("Recall (Sensitivity):", round(recall, 2), "\n")
+cat("F1 Score:", round(f1_score, 2), "\n")
+```
+
+```{r}
+importance = tree_model$variable.importance
+importance_sorted <- sort(importance, decreasing = TRUE)
+custom_names <- c("pff_positionLinedUp" = "Player Position", "xDiff" = "X Distance from Center", "yDiff" = "Y Distance from Center", 
+                  "lineDiffY" = "Y Distance from Average D-Lineman", "lineDiffX" = "X Distance from Average D-Lineman", "lbDiffY" = "Y Distance from Average Linebacker", "lbDiffX" = "X Distance from Average Linebacker")
+
+# Apply custom names to the sorted importance vector
+names(importance_sorted) <- custom_names[names(importance_sorted)]
+# Plot variable importance
+importance_df <- data.frame(Feature = names(importance_sorted), Importance = importance_sorted)
+
+ggplot(importance_df, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Variable Importance", x = "Feature", y = "Importance") +
+  coord_flip() # Flips the axes to make the plot horizontal
+```
